@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tarjetas Interactivas de Alemán (Carrusel)</title>
+
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -193,6 +194,7 @@
         let shuffledFlashcards = [];
         let currentCardIndex = 0;
         let isCardFlipped = false;
+        let speechVoices = []; // Almacenará las voces disponibles
 
         const flashcardContainer = document.getElementById('flashcard-container');
         const cardImage = document.getElementById('card-image');
@@ -201,6 +203,7 @@
         const pronunciationIPA = document.getElementById('pronunciation-ipa');
         const cardCounter = document.getElementById('card-counter');
 
+        // Función para mezclar un array (Fisher-Yates)
         function shuffleArray(array) {
             for (let i = array.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
@@ -209,6 +212,7 @@
             return array;
         }
 
+        // Función para obtener el HTML con el artículo coloreado
         function getGermanWordHtml(word) {
             const parts = word.split(' ');
             if (parts.length > 1) {
@@ -223,6 +227,7 @@
             return word;
         }
 
+        // Función para mostrar una tarjeta específica
         function displayCard(index) {
             if (index < 0) {
                 currentCardIndex = shuffledFlashcards.length - 1;
@@ -234,6 +239,7 @@
 
             const card = shuffledFlashcards[currentCardIndex];
 
+            // Asegurarse de que la tarjeta no esté volteada al cambiarla
             if (isCardFlipped) {
                 flashcardContainer.classList.remove('flipped');
                 isCardFlipped = false;
@@ -247,11 +253,13 @@
             cardCounter.textContent = `Tarjeta ${currentCardIndex + 1} de ${shuffledFlashcards.length}`;
         }
 
+        // Función para voltear la tarjeta
         function flipCard() {
             flashcardContainer.classList.toggle('flipped');
             isCardFlipped = !isCardFlipped;
         }
 
+        // Funciones de navegación
         function nextCard() {
             displayCard(currentCardIndex + 1);
         }
@@ -260,31 +268,86 @@
             displayCard(currentCardIndex - 1);
         }
 
-        function speakCurrentGermanWord() {
-            const currentGermanWord = shuffledFlashcards[currentCardIndex].germanWord;
-            if ('speechSynthesis' in window) {
-                const utterance = new SpeechSynthesisUtterance(currentGermanWord);
-                utterance.lang = 'de-DE';
-                utterance.rate = 0.9;
-                utterance.pitch = 1;
+        // Función para intentar hablar la palabra (mejorada)
+        function attemptSpeak(word, useDefaultVoice = false) {
+            const utterance = new SpeechSynthesisUtterance(word);
+            utterance.lang = 'de-DE'; // Intenta con el código de idioma alemán específico
 
-                const voices = speechSynthesis.getVoices();
-                const germanVoice = voices.find(voice => voice.lang === 'de-DE' || voice.lang.startsWith('de-'));
+            if (!useDefaultVoice) {
+                // Busca una voz alemana específica entre las cargadas
+                const germanVoice = speechVoices.find(voice => voice.lang === 'de-DE' || voice.lang.startsWith('de-'));
                 if (germanVoice) {
                     utterance.voice = germanVoice;
+                    console.log("Usando voz alemana:", germanVoice.name);
                 } else {
-                    console.warn("No se encontró una voz alemana específica. Usando la voz predeterminada.");
+                    console.warn("No se encontró una voz alemana específica. Usando la voz predeterminada del sistema.");
+                    // Si no se encuentra una voz 'de-DE', intenta con 'de' más genérico
+                    utterance.lang = 'de';
                 }
-
-                speechSynthesis.speak(utterance);
             } else {
+                console.warn("Forzando voz predeterminada, no se pudo encontrar voz específica.");
+                utterance.lang = 'de'; // Asegura que siga siendo idioma alemán
+            }
+
+            utterance.rate = 0.9;
+            utterance.pitch = 1;
+
+            speechSynthesis.speak(utterance);
+        }
+
+        // Función principal para la pronunciación al hacer click en el icono
+        function speakCurrentGermanWord() {
+            const currentGermanWord = shuffledFlashcards[currentCardIndex].germanWord;
+
+            if (!('speechSynthesis' in window)) {
                 alert("Tu navegador no soporta la síntesis de voz.");
+                return;
+            }
+
+            // Si las voces no están cargadas aún, intentamos cargarlas y luego hablar
+            if (speechVoices.length === 0) {
+                console.log("Voces aún no cargadas. Intentando cargar y hablar...");
+                // Intentamos recargar las voces
+                speechSynthesis.getVoices();
+                // Ponemos un pequeño retardo para dar tiempo a que las voces carguen
+                setTimeout(() => {
+                    if (speechVoices.length > 0) { // Si ya cargaron
+                        attemptSpeak(currentGermanWord);
+                    } else { // Si aún no cargan (muy raro), hablamos con la voz por defecto
+                        console.warn("Voces aún no disponibles después del retardo. Hablando con voz predeterminada.");
+                        attemptSpeak(currentGermanWord, true);
+                    }
+                }, 200); // 200ms de retardo
+            } else {
+                // Si las voces ya están cargadas, hablamos directamente
+                attemptSpeak(currentGermanWord);
             }
         }
 
+        // Evento que se dispara cuando las voces de síntesis de voz están disponibles
+        window.speechSynthesis.onvoiceschanged = () => {
+            speechVoices = speechSynthesis.getVoices();
+            console.log("Voces de síntesis de voz cargadas. Cantidad:", speechVoices.length);
+        };
+
+        // Inicialización al cargar la página
         document.addEventListener('DOMContentLoaded', () => {
             shuffledFlashcards = shuffleArray([...flashcards]);
             displayCard(0);
+
+            // *** OPTIMIZACIÓN: Precargar todas las imágenes al inicio ***
+            shuffledFlashcards.forEach(card => {
+                const preloadLink = document.createElement('link');
+                preloadLink.rel = 'preload';
+                preloadLink.as = 'image';
+                preloadLink.href = card.imageSrc;
+                document.head.appendChild(preloadLink);
+            });
+
+            // Inicia la carga de las voces tan pronto como sea posible, pero no intentes hablar aún
+            if ('speechSynthesis' in window) {
+                speechSynthesis.getVoices();
+            }
         });
     </script>
 
