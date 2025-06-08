@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tarjetas Interactivas de Alemán (Carrusel)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column; /* Para organizar el carrusel y los botones verticalmente */
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh; /* Ocupar toda la altura de la ventana */
+            background-color: #f0f0f0;
+            perspective: 1000px;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .carousel-container {
+            width: 350px; /* Ancho del contenedor del carrusel, Aumentado */
+            height: 250px; /* Alto del contenedor del carrusel, Aumentado */
+            position: relative;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: transparent;
+        }
+
+        .card-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            transform-style: preserve-3d;
+            transition: transform 0.6s;
+            cursor: pointer;
+        }
+        .card-container.flipped {
+            transform: rotateY(180deg);
+        }
+
+        .card-face {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            backface-visibility: hidden;
+            border: 2px solid #333;
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-size: 2em; /* Letra más grande */
+            font-weight: bold;
+            color: #333;
+            background-color: #fff;
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.3);
+            text-align: center;
+            padding: 10px;
+            box-sizing: border-box;
+            line-height: 1.2;
+        }
+        .card-front {
+            z-index: 2;
+            transform: rotateY(0deg);
+        }
+        .card-back {
+            transform: rotateY(180deg);
+            background-color: #e0f7fa;
+            font-size: 1.6em; /* Traducción un poco más grande */
+        }
+        .card-image {
+            max-width: 80%;
+            max-height: 60%;
+            object-fit: contain;
+            margin-bottom: 8px;
+            border-radius: 8px;
+        }
+        .article {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+        }
+        /* Colores para los artículos */
+        .der { color: #007bff; }
+        .die { color: #dc3545; }
+        .das { color: #28a745; }
+
+        .translation {
+            margin-top: 15px;
+            font-size: 1.5em; /* Traducción más grande */
+            color: #4a4a4a;
+        }
+        .pronunciation {
+            font-size: 1.1em; /* Pronunciación un poco más grande */
+            color: #777;
+            font-style: italic;
+            margin-top: 8px;
+        }
+        .audio-icon {
+            font-size: 2em; /* Icono de audio más grande */
+            cursor: pointer;
+            margin-top: 15px;
+            color: #007bff;
+        }
+        .audio-icon:hover {
+            color: #0056b3;
+            transform: scale(1.1);
+        }
+
+        .navigation-buttons {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .nav-button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 25px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .nav-button:hover {
+            background-color: #0056b3;
+        }
+        .nav-button:active {
+            background-color: #004080;
+            transform: translateY(1px);
+        }
+        .card-counter {
+            margin-top: 15px;
+            font-size: 1em;
+            color: #555;
+        }
+
+        @media print {
+            body {
+                background-color: #fff;
+                padding: 0;
+                perspective: none;
+            }
+            .carousel-container, .navigation-buttons, .card-counter {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="carousel-container">
+        <div id="flashcard-container" class="card-container" onclick="flipCard()">
+            <div class="card-face card-front">
+                <img id="card-image" src="" alt="" class="card-image">
+                <div id="german-word-front"></div>
+            </div>
+            <div class="card-face card-back">
+                <div id="spanish-translation" class="translation"></div>
+                <div id="pronunciation-ipa" class="pronunciation"></div>
+                <span class="audio-icon" onclick="event.stopPropagation(); speakCurrentGermanWord();">&#128266;</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="navigation-buttons">
+        <button class="nav-button" onclick="prevCard()">Anterior</button>
+        <button class="nav-button" onclick="nextCard()">Siguiente</button>
+    </div>
+    <div id="card-counter" class="card-counter">Tarjeta 1 de X</div>
+
+    <script>
+        const flashcards = [
+            { germanWord: 'Die Banane', translation: 'El plátano', imageSrc: 'banana.png', pronunciationIPA: '/ˈbaˈnaːnə/' },
+            { germanWord: 'Die Pause', translation: 'El recreo', imageSrc: 'recreo.jpg', pronunciationIPA: '/ˈpaʊzə/' },
+            { germanWord: 'Das Brot', translation: 'El pan', imageSrc: 'pan.png', pronunciationIPA: '/bʁoːt/' },
+            { germanWord: 'Das Käsebrot', translation: 'El bocadillo de queso', imageSrc: 'panqueso.png', pronunciationIPA: '/ˈkɛːzəˌbʁoːt/' },
+            { germanWord: 'Das Schinkenbrötchen', translation: 'El bocadillo de jamón', imageSrc: 'panjamon.png', pronunciationIPA: '/ˈʃɪŋkn̩ˌbʁøːtçn̩/' },
+            { germanWord: 'Das Klassenzimmer', translation: 'El aula / La clase', imageSrc: 'saladeclases.png', pronunciationIPA: '/ˈklasn̩ˌʦɪmɐ/' },
+            { germanWord: 'Der Müsliriegel', translation: 'La barrita de cereales', imageSrc: 'barra de cereal.jpg', pronunciationIPA: '/ˈmyːsliˌriːɡl̩/' },
+            { germanWord: 'Der Apfel', translation: 'La manzana', imageSrc: 'manzana.png', pronunciationIPA: '/ˈapfl̩/' },
+            { germanWord: 'Der Saft', translation: 'El zumo', imageSrc: 'jugo.jpg', pronunciationIPA: '/zaft/' },
+            { germanWord: 'Der Orangensaft', translation: 'El zumo de naranja', imageSrc: 'jugonaranja.jpg', pronunciationIPA: '/oˈʁaŋʒn̩ˌzaft/' },
+            { germanWord: 'Der Joghurt', translation: 'El yogur', imageSrc: 'yogur.png', pronunciationIPA: '/ˈjoːɡʊʁt/' },
+            { germanWord: 'Der Schulhof', translation: 'El patio de la escuela', imageSrc: 'patio.png', pronunciationIPA: '/ˈʃuːlhoːf/' },
+            { germanWord: 'Der Schulkiosk', translation: 'El quiosco de la escuela', imageSrc: 'kiosko.png', pronunciationIPA: '/ˈʃuːlkiˌɔsk/' }
+        ];
+
+        let shuffledFlashcards = [];
+        let currentCardIndex = 0;
+        let isCardFlipped = false;
+
+        const flashcardContainer = document.getElementById('flashcard-container');
+        const cardImage = document.getElementById('card-image');
+        const germanWordFront = document.getElementById('german-word-front');
+        const spanishTranslation = document.getElementById('spanish-translation');
+        const pronunciationIPA = document.getElementById('pronunciation-ipa');
+        const cardCounter = document.getElementById('card-counter');
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function getGermanWordHtml(word) {
+            const parts = word.split(' ');
+            if (parts.length > 1) {
+                const article = parts[0];
+                const restOfWord = parts.slice(1).join(' ');
+                let articleClass = '';
+                if (article === 'Der') articleClass = 'der';
+                else if (article === 'Die') articleClass = 'die';
+                else if (article === 'Das') articleClass = 'das';
+                return `<span class="${articleClass}">${article}</span> ${restOfWord}`;
+            }
+            return word;
+        }
+
+        function displayCard(index) {
+            if (index < 0) {
+                currentCardIndex = shuffledFlashcards.length - 1;
+            } else if (index >= shuffledFlashcards.length) {
+                currentCardIndex = 0;
+            } else {
+                currentCardIndex = index;
+            }
+
+            const card = shuffledFlashcards[currentCardIndex];
+
+            if (isCardFlipped) {
+                flashcardContainer.classList.remove('flipped');
+                isCardFlipped = false;
+            }
+
+            cardImage.src = card.imageSrc;
+            cardImage.alt = card.translation;
+            germanWordFront.innerHTML = getGermanWordHtml(card.germanWord);
+            spanishTranslation.textContent = card.translation;
+            pronunciationIPA.textContent = card.pronunciationIPA;
+            cardCounter.textContent = `Tarjeta ${currentCardIndex + 1} de ${shuffledFlashcards.length}`;
+        }
+
+        function flipCard() {
+            flashcardContainer.classList.toggle('flipped');
+            isCardFlipped = !isCardFlipped;
+        }
+
+        function nextCard() {
+            displayCard(currentCardIndex + 1);
+        }
+
+        function prevCard() {
+            displayCard(currentCardIndex - 1);
+        }
+
+        function speakCurrentGermanWord() {
+            const currentGermanWord = shuffledFlashcards[currentCardIndex].germanWord;
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(currentGermanWord);
+                utterance.lang = 'de-DE';
+                utterance.rate = 0.9;
+                utterance.pitch = 1;
+
+                const voices = speechSynthesis.getVoices();
+                const germanVoice = voices.find(voice => voice.lang === 'de-DE' || voice.lang.startsWith('de-'));
+                if (germanVoice) {
+                    utterance.voice = germanVoice;
+                } else {
+                    console.warn("No se encontró una voz alemana específica. Usando la voz predeterminada.");
+                }
+
+                speechSynthesis.speak(utterance);
+            } else {
+                alert("Tu navegador no soporta la síntesis de voz.");
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            shuffledFlashcards = shuffleArray([...flashcards]);
+            displayCard(0);
+        });
+    </script>
+
+</body>
+</html>
